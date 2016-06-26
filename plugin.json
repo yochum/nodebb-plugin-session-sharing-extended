@@ -1,6 +1,6 @@
 {
-	"id": "nodebb-plugin-session-sharing",
-	"url": "https://github.com/NodeBB/nodebb-plugin-session-sharing",
+	"id": "nodebb-plugin-session-sharing-extended",
+	"url": "https://github.com/alecananian/nodebb-plugin-session-sharing-extended",
 	"library": "./library.js",
 	"hooks": [
 		{ "hook": "static:app.preload", "method": "addMiddleware" },

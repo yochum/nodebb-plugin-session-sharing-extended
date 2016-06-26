@@ -1,20 +1,27 @@
 {
-  "name": "nodebb-plugin-session-sharing",
+  "name": "nodebb-plugin-session-sharing-extended",
   "version": "2.1.1",
   "description": "Allows login sessions from your app to persist in NodeBB",
   "main": "library.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/julianlam/nodebb-plugin-session-sharing"
+    "url": "https://github.com/alecananian/nodebb-plugin-session-sharing-extended"
   },
   "keywords": [
     "nodebb",
     "plugin"
   ],
-  "author": {
-    "name": "Julian Lam",
-    "email": "julian@nodebb.org"
-  },
+  "contributors": [
+    {
+      "name": "Julian Lam",
+      "email": "julian@designcreateplay.com",
+      "url": "https://github.com/julianlam"
+    },
+    {
+      "name": "Alec Ananian",
+      "url": "https://github.com/alecananian"
+    }
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/julianlam/nodebb-plugin-session-sharing/issues"
