@@ -15,7 +15,7 @@ var jwt = require('jsonwebtoken');
 var controllers = require('./lib/controllers'),
 	nbbAuthController = module.parent.require('./controllers/authentication');
 	
-const PayloadKeys = {
+var PayloadKeys = {
 	id: 'payload:id',
 	email: 'payload:email',
 	username: 'payload:username',
