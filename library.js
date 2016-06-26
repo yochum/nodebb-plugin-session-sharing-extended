@@ -227,7 +227,6 @@ plugin.createUser = function(payload, callback) {
 	user.create({
 		username: plugin.normalizeUsername(username, firstName, lastName),
 		email: email,
-		picture: picture,
 		fullname: [firstName, lastName].join(' ').trim()
 	}, function(err, uid) {
 		if (err) { return callback(err); }
