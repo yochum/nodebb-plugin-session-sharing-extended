@@ -178,8 +178,7 @@ plugin.findUser = function(payload, callback) {
 				} else {
 					async.series([
 						async.apply(db.deleteObjectField, plugin.settings.name + ':uid', id),	// reference is outdated, user got deleted
-						async.apply(plugin.createUser, payload),
-						async.apply(plugin.updateUser, payload)
+						async.apply(plugin.createUser, payload)
 					], function(err, data) {
 						callback(err, data[1]);
 					});
@@ -191,26 +190,9 @@ plugin.findUser = function(payload, callback) {
 			callback(null, checks.mergeUid);
 		} else {
 			// No match, create a new user
-			async.series([
-				async.apply(plugin.createUser, payload),
-				async.apply(plugin.updateUser, payload)
-			], function (err, data) {
-				callback(err, data[1]);
-			});
+			plugin.createUser(payload, callback);
 		}
 	});
-};
-
-plugin.normalizeUsername = function(username, firstName, lastName) {
-	if (!username && firstName && lastName) {
-		username = [firstName, lastName].join(' ').trim();
-	} else if (!username && firstName && !lastName) {
-		username = firstName;
-	} else if (!username && !firstName && lastName) {
-		username = lastName;
-	}
-	
-	return username.trim().replace(/[^'"\s\-.*0-9\u00BF-\u1FFF\u2C00-\uD7FF\w]+/, '-');
 };
 
 plugin.createUser = function(payload, callback) {
@@ -220,19 +202,66 @@ plugin.createUser = function(payload, callback) {
 		email = data_payload[plugin.settings[PayloadKeys.email]],
 		username = data_payload[plugin.settings[PayloadKeys.username]],
 		firstName = data_payload[plugin.settings[PayloadKeys.firstName]],
-		lastName = data_payload[plugin.settings[PayloadKeys.lastName]];
+		lastName = data_payload[plugin.settings[PayloadKeys.lastName]],
+		picture = data_payload[plugin.settings[PayloadKeys.picture]],
+		location = data_payload[plugin.settings[PayloadKeys.location]],
+		website = data_payload[plugin.settings[PayloadKeys.website]],
+		joindate = data_payload[plugin.settings[PayloadKeys.joindate]];
+		
+	if (!username && firstName && lastName) {
+		username = [firstName, lastName].join(' ').trim();
+	} else if (!username && firstName && !lastName) {
+		username = firstName;
+	} else if (!username && !firstName && lastName) {
+		username = lastName;
+	}
+	
+	username = username.trim().replace(/[^'"\s\-.*0-9\u00BF-\u1FFF\u2C00-\uD7FF\w]+/, '-');
 		
 	winston.info('[session-sharing] No user found, creating a new user for this login');
 	
 	user.create({
-		username: plugin.normalizeUsername(username, firstName, lastName),
+		username: username,
 		email: email,
 		fullname: [firstName, lastName].join(' ').trim()
 	}, function(err, uid) {
-		if (err) { return callback(err); }
+		if (err) { 
+			return callback(err); 
+		}
 
 		db.setObjectField(plugin.settings.name + ':uid', id, uid);
-		callback(null, uid);
+		
+		var query = {
+			updateProfile: async.apply(user.updateProfile, uid, {
+				fullname: [firstName, lastName].join(' ').trim(),
+				location: location,
+				website: website
+			})
+		};
+		
+		if (joindate) {
+			winston.info('[session-sharing] Updating joindate for user with id ' + uid + ' to ' + joindate);
+		
+			query.updateJoinDate = async.apply(user.setUserFields, uid, {
+				joindate: joindate
+			});
+		}
+		
+		if (picture) {
+			winston.info('[session-sharing] Updating picture for user with id ' + uid + ' to ' + picture);
+		
+			query.updatePicture = async.apply(user.setUserFields, uid, {
+				picture: picture
+			});
+		}
+		
+		async.parallel(query, function (err, done) {
+			if (err) {
+				return callback(err);
+			}
+			
+			callback(null, uid);
+		});
 	});
 };
 
@@ -246,18 +275,29 @@ plugin.updateUser = function(payload, callback) {
 		location = data_payload[plugin.settings[PayloadKeys.location]],
 		website = data_payload[plugin.settings[PayloadKeys.website]],
 		joindate = data_payload[plugin.settings[PayloadKeys.joindate]];
+		
+	winston.info('[session-sharing] Updating profile info for user with id ' + id);
 	
 	var query = {
-		updated: async.apply(user.updateProfile, id, {
+		updateProfile: async.apply(user.updateProfile, id, {
 			fullname: [firstName, lastName].join(' ').trim(),
 			location: location,
-			website: website,
-			joindate: joindate
+			website: website
 		})
 	};
 	
+	if (joindate) {
+		winston.info('[session-sharing] Updating joindate for user with id ' + id + ' to ' + joindate);
+	
+		query.updateJoinDate = async.apply(user.setUserFields, id, {
+			joindate: joindate
+		});
+	}
+	
 	if (picture) {
-		query.image = async.apply(user.setUserFields, id, {
+		winston.info('[session-sharing] Updating picture for user with id ' + id + ' to ' + picture);
+	
+		query.updatePicture = async.apply(user.setUserFields, id, {
 			picture: picture
 		});
 	}
@@ -267,7 +307,7 @@ plugin.updateUser = function(payload, callback) {
 			return callback(err);
 		}
 		
-		callback(null, done.updated.uid);
+		callback(null, done.updateProfile.uid);
 	});
 };
 
