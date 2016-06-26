@@ -81,6 +81,18 @@
 						<input type="text" id="payload:picture" name="payload:picture" title="Picture" class="form-control" placeholder="picture">
 					</div>
 					<div class="form-group">
+						<label for="payload:location">Location</label>
+						<input type="text" id="payload:location" name="payload:location" title="Location" class="form-control" placeholder="location">
+					</div>
+					<div class="form-group">
+						<label for="payload:website">Website</label>
+						<input type="text" id="payload:website" name="payload:website" title="Website" class="form-control" placeholder="website">
+					</div>
+					<div class="form-group">
+						<label for="payload:joindate">Join Date</label>
+						<input type="text" id="payload:joindate" name="payload:joindate" title="Join Date" class="form-control" placeholder="joindate">
+					</div>
+					<div class="form-group">
 						<label for="payload:parent">Parent Key</label>
 						<input type="text" id="payload:parent" name="payload:parent" title="Parent Key" class="form-control">
 						<p class="help-block">

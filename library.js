@@ -14,6 +14,19 @@ var jwt = require('jsonwebtoken');
 
 var controllers = require('./lib/controllers'),
 	nbbAuthController = module.parent.require('./controllers/authentication');
+	
+const PayloadKeys = {
+	id: 'payload:id',
+	email: 'payload:email',
+	username: 'payload:username',
+	firstName: 'payload:firstName',
+	lastName: 'payload:lastName',
+	picture: 'payload:picture',
+	location: 'payload:location',
+	website: 'payload:website',
+	joindate: 'payload:joindate',
+	parent: 'payload:parent'
+};
 
 var plugin = {
 		ready: false,
@@ -22,16 +35,20 @@ var plugin = {
 			cookieName: 'token',
 			cookieDomain: undefined,
 			secret: '',
-			behaviour: 'trust',
-			'payload:id': 'id',
-			'payload:email': 'email',
-			'payload:username': undefined,
-			'payload:firstName': undefined,
-			'payload:lastName': undefined,
-			'payload:picture': 'picture',
-			'payload:parent': undefined
+			behaviour: 'trust'
 		}
 	};
+
+plugin.settings[PayloadKeys.id] = 'id';
+plugin.settings[PayloadKeys.email] = 'email';
+plugin.settings[PayloadKeys.username] = undefined;
+plugin.settings[PayloadKeys.firstName] = undefined;
+plugin.settings[PayloadKeys.lastName] = undefined;
+plugin.settings[PayloadKeys.picture] = 'picture';
+plugin.settings[PayloadKeys.location] = 'location';
+plugin.settings[PayloadKeys.website] = 'website';
+plugin.settings[PayloadKeys.joindate] = 'joindate';
+plugin.settings[PayloadKeys.parent] = undefined;
 
 plugin.init = function(params, callback) {
 	var router = params.router,
@@ -102,11 +119,12 @@ plugin.process = function(token, callback) {
 };
 
 plugin.verifyToken = function(payload, callback) {
-	var parent = plugin.settings['payload:parent'],
-		id = parent ? payload[parent][plugin.settings['payload:id']] : payload[plugin.settings['payload:id']],
-		username = parent ? payload[parent][plugin.settings['payload:username']] : payload[plugin.settings['payload:username']],
-		firstName = parent ? payload[parent][plugin.settings['payload:firstName']] : payload[plugin.settings['payload:firstName']],
-		lastName = parent ? payload[parent][plugin.settings['payload:lastName']] : payload[plugin.settings['payload:lastName']];
+	var parent = plugin.settings[PayloadKeys.parent],
+		data_payload = parent ? payload[parent] : payload,
+		id = data_payload[plugin.settings[PayloadKeys.id]],
+		username = data_payload[plugin.settings[PayloadKeys.username]],
+		firstName = data_payload[plugin.settings[PayloadKeys.firstName]],
+		lastName = data_payload[plugin.settings[PayloadKeys.lastName]];
 
 	if (!id || (!username && !firstName && !lastName)) {
 		return callback(new Error('payload-invalid'));
@@ -130,10 +148,11 @@ plugin.findUser = function(payload, callback) {
 	// If payload id resolves to a user, return the uid, otherwise register a new user
 	winston.verbose('[session-sharing] Payload verified');
 
-	var parent = plugin.settings['payload:parent'],
-		id = parent ? payload[parent][plugin.settings['payload:id']] : payload[plugin.settings['payload:id']],
-		email = parent ? payload[parent][plugin.settings['payload:email']] : payload[plugin.settings['payload:email']],
-		username = parent ? payload[parent][plugin.settings['payload:username']] : payload[plugin.settings['payload:username']];
+	var parent = plugin.settings[PayloadKeys.parent],
+		data_payload = parent ? payload[parent] : payload,
+		id = data_payload[plugin.settings[PayloadKeys.id]],
+		email = data_payload[plugin.settings[PayloadKeys.email]],
+		username = data_payload[plugin.settings[PayloadKeys.username]];
 
 	if (!username && firstName && lastName) {
 		username = [firstName, lastName].join(' ').trim();
@@ -159,7 +178,8 @@ plugin.findUser = function(payload, callback) {
 				} else {
 					async.series([
 						async.apply(db.deleteObjectField, plugin.settings.name + ':uid', id),	// reference is outdated, user got deleted
-						async.apply(plugin.createUser, payload)
+						async.apply(plugin.createUser, payload),
+						async.apply(plugin.updateUser, payload)
 					], function(err, data) {
 						callback(err, data[1]);
 					});
@@ -171,20 +191,17 @@ plugin.findUser = function(payload, callback) {
 			callback(null, checks.mergeUid);
 		} else {
 			// No match, create a new user
-			plugin.createUser(payload, callback);
+			async.series([
+				async.apply(plugin.createUser, payload),
+				async.apply(plugin.updateUser, payload)
+			], function (err, data) {
+				callback(err, data[1]);
+			});
 		}
 	});
 };
 
-plugin.createUser = function(payload, callback) {
-	var parent = plugin.settings['payload:parent'],
-		id = parent ? payload[parent][plugin.settings['payload:id']] : payload[plugin.settings['payload:id']],
-		email = parent ? payload[parent][plugin.settings['payload:email']] : payload[plugin.settings['payload:email']],
-		username = parent ? payload[parent][plugin.settings['payload:username']] : payload[plugin.settings['payload:username']],
-		firstName = parent ? payload[parent][plugin.settings['payload:firstName']] : payload[plugin.settings['payload:firstName']],
-		lastName = parent ? payload[parent][plugin.settings['payload:lastName']] : payload[plugin.settings['payload:lastName']],
-		picture = parent ? payload[parent][plugin.settings['payload:picture']] : payload[plugin.settings['payload:picture']];
-
+plugin.normalizeUsername = function(username, firstName, lastName) {
 	if (!username && firstName && lastName) {
 		username = [firstName, lastName].join(' ').trim();
 	} else if (!username && firstName && !lastName) {
@@ -192,12 +209,23 @@ plugin.createUser = function(payload, callback) {
 	} else if (!username && !firstName && lastName) {
 		username = lastName;
 	}
+	
+	return username.trim().replace(/[^'"\s\-.*0-9\u00BF-\u1FFF\u2C00-\uD7FF\w]+/, '-');
+};
 
+plugin.createUser = function(payload, callback) {
+	var parent = plugin.settings[PayloadKeys.parent],
+		data_payload = parent ? payload[parent] : payload,
+		id = data_payload[plugin.settings[PayloadKeys.id]],
+		email = data_payload[plugin.settings[PayloadKeys.email]],
+		username = data_payload[plugin.settings[PayloadKeys.username]],
+		firstName = data_payload[plugin.settings[PayloadKeys.firstName]],
+		lastName = data_payload[plugin.settings[PayloadKeys.lastName]];
+		
 	winston.info('[session-sharing] No user found, creating a new user for this login');
-	username = username.trim().replace(/[^'"\s\-.*0-9\u00BF-\u1FFF\u2C00-\uD7FF\w]+/, '-');
-
+	
 	user.create({
-		username: username,
+		username: plugin.normalizeUsername(username, firstName, lastName),
 		email: email,
 		picture: picture,
 		fullname: [firstName, lastName].join(' ').trim()
@@ -206,6 +234,41 @@ plugin.createUser = function(payload, callback) {
 
 		db.setObjectField(plugin.settings.name + ':uid', id, uid);
 		callback(null, uid);
+	});
+};
+
+plugin.updateUser = function(payload, callback) {
+	var parent = plugin.settings[PayloadKeys.parent],
+		data_payload = parent ? payload[parent] : payload,
+		id = data_payload[plugin.settings[PayloadKeys.id]],
+		firstName = data_payload[plugin.settings[PayloadKeys.firstName]],
+		lastName = data_payload[plugin.settings[PayloadKeys.lastName]],
+		picture = data_payload[plugin.settings[PayloadKeys.picture]],
+		location = data_payload[plugin.settings[PayloadKeys.location]],
+		website = data_payload[plugin.settings[PayloadKeys.website]],
+		joindate = data_payload[plugin.settings[PayloadKeys.joindate]];
+	
+	var query = {
+		updated: async.apply(user.updateProfile, id, {
+			fullname: [firstName, lastName].join(' ').trim(),
+			location: location,
+			website: website,
+			joindate: joindate
+		})
+	};
+	
+	if (picture) {
+		query.image = async.apply(user.setUserFields, id, {
+			picture: picture
+		});
+	}
+	
+	async.parallel(query, function (err, done) {
+		if (err) {
+			return callback(err);
+		}
+		
+		callback(null, done.updated.uid);
 	});
 };
 
@@ -300,9 +363,9 @@ plugin.cleanup = function(data, callback) {
 
 plugin.generate = function(req, res) {
 	var payload = {};
-	payload[plugin.settings['payload:id']] = 1;
-	payload[plugin.settings['payload:username']] = 'testUser';
-	payload[plugin.settings['payload:email']] = 'testUser@example.org';
+	payload[plugin.settings[PayloadKeys.id]] = 1;
+	payload[plugin.settings[PayloadKeys.username]] = 'testUser';
+	payload[plugin.settings[PayloadKeys.email]] = 'testUser@example.org';
 
 	var token = jwt.sign(payload, plugin.settings.secret)
 	res.cookie('token', token, {
