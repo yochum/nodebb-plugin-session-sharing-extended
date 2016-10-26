@@ -1,11 +1,11 @@
 {
-  "name": "nodebb-plugin-session-sharing-extended",
+  "name": "nodebb-plugin-sso-jwt",
   "version": "2.2.3",
-  "description": "Allows login sessions from your app to persist in NodeBB",
+  "description": "Allows login sessions from your app to persist or transfer to NodeBB",
   "main": "library.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alecananian/nodebb-plugin-session-sharing-extended"
+    "url": "https://github.com/yochum/nodebb-plugin-sso-jwt"
   },
   "keywords": [
     "nodebb",
@@ -20,6 +20,10 @@
     {
       "name": "Alec Ananian",
       "url": "https://github.com/alecananian"
+    },
+    {
+      "name": "Andrew Yochum",
+      "url": "https://github.com/yochum"
     }
   ],
   "license": "MIT",
