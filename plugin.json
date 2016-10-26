@@ -1,6 +1,6 @@
 {
-	"id": "nodebb-plugin-session-sharing-extended",
-	"url": "https://github.com/alecananian/nodebb-plugin-session-sharing-extended",
+	"id": "nodebb-plugin-sso-jwt",
+	"url": "https://github.com/yochum/nodebb-plugin-sso-jwt",
 	"library": "./library.js",
 	"hooks": [
 		{ "hook": "static:app.preload", "method": "addMiddleware" },

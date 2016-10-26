@@ -14,7 +14,7 @@ var jwt = require('jsonwebtoken');
 
 var controllers = require('./lib/controllers'),
 	nbbAuthController = module.parent.require('./controllers/authentication');
-	
+
 var PayloadKeys = {
 	id: 'payload:id',
 	email: 'payload:email',
@@ -32,6 +32,7 @@ var plugin = {
 		ready: false,
 		settings: {
 			name: 'appId',
+			mode: 'cookie',
 			cookieName: 'token',
 			cookieDomain: undefined,
 			secret: '',
@@ -57,6 +58,7 @@ plugin.init = function(params, callback) {
 
 	router.get('/admin/plugins/session-sharing', hostMiddleware.admin.buildHeader, controllers.renderAdminPage);
 	router.get('/api/admin/plugins/session-sharing', controllers.renderAdminPage);
+	router.get('/api/plugins/session-sharing/jwt', plugin.receiveJWT);
 
 	if (process.env.NODE_ENV === 'development') {
 		router.get('/debug/session', plugin.generate);
@@ -126,6 +128,11 @@ plugin.verifyToken = function(payload, callback) {
 		firstName = data_payload[plugin.settings[PayloadKeys.firstName]],
 		lastName = data_payload[plugin.settings[PayloadKeys.lastName]];
 
+		winston.info('[session-sharing] id', id);
+		winston.info('[session-sharing] username', username);
+		winston.info('[session-sharing] firstName', firstName);
+		winston.info('[session-sharing] lastName', lastName);
+
 	if (!id || (!username && !firstName && !lastName)) {
 		return callback(new Error('payload-invalid'));
 	}
@@ -174,7 +181,9 @@ plugin.findUser = function(payload, callback) {
 				if (err) {
 					return callback(err);
 				} else if (exists) {
-					return callback(null, checks.uid);
+					plugin.updateUser(payload, function(err, uid) {
+						callback(err, uid);
+					});
 				} else {
 					async.series([
 						async.apply(db.deleteObjectField, plugin.settings.name + ':uid', id),	// reference is outdated, user got deleted
@@ -207,7 +216,7 @@ plugin.createUser = function(payload, callback) {
 		location = data_payload[plugin.settings[PayloadKeys.location]],
 		website = data_payload[plugin.settings[PayloadKeys.website]],
 		joindate = data_payload[plugin.settings[PayloadKeys.joindate]];
-		
+
 	if (!username && firstName && lastName) {
 		username = [firstName, lastName].join(' ').trim();
 	} else if (!username && firstName && !lastName) {
@@ -215,22 +224,22 @@ plugin.createUser = function(payload, callback) {
 	} else if (!username && !firstName && lastName) {
 		username = lastName;
 	}
-	
+
 	username = username.trim().replace(/[^'"\s\-.*0-9\u00BF-\u1FFF\u2C00-\uD7FF\w]+/, '-');
-		
+
 	winston.info('[session-sharing] No user found, creating a new user for this login');
-	
+
 	user.create({
 		username: username,
 		email: email,
 		fullname: [firstName, lastName].join(' ').trim()
 	}, function(err, uid) {
-		if (err) { 
-			return callback(err); 
+		if (err) {
+			return callback(err);
 		}
 
 		db.setObjectField(plugin.settings.name + ':uid', id, uid);
-		
+
 		var query = {
 			updateProfile: async.apply(user.updateProfile, uid, {
 				fullname: [firstName, lastName].join(' ').trim(),
@@ -238,28 +247,28 @@ plugin.createUser = function(payload, callback) {
 				website: website
 			})
 		};
-		
+
 		if (joindate) {
 			winston.info('[session-sharing] Updating joindate for user with id ' + uid + ' to ' + joindate);
-		
+
 			query.updateJoinDate = async.apply(user.setUserFields, uid, {
 				joindate: joindate
 			});
 		}
-		
+
 		if (picture) {
 			winston.info('[session-sharing] Updating picture for user with id ' + uid + ' to ' + picture);
-		
+
 			query.updatePicture = async.apply(user.setUserFields, uid, {
 				picture: picture
 			});
 		}
-		
+
 		async.parallel(query, function (err, done) {
 			if (err) {
 				return callback(err);
 			}
-			
+
 			callback(null, uid);
 		});
 	});
@@ -275,9 +284,9 @@ plugin.updateUser = function(payload, callback) {
 		location = data_payload[plugin.settings[PayloadKeys.location]],
 		website = data_payload[plugin.settings[PayloadKeys.website]],
 		joindate = data_payload[plugin.settings[PayloadKeys.joindate]];
-		
+
 	winston.info('[session-sharing] Updating profile info for user with id ' + id);
-	
+
 	var query = {
 		updateProfile: async.apply(user.updateProfile, id, {
 			fullname: [firstName, lastName].join(' ').trim(),
@@ -285,28 +294,28 @@ plugin.updateUser = function(payload, callback) {
 			website: website
 		})
 	};
-	
+
 	if (joindate) {
 		winston.info('[session-sharing] Updating joindate for user with id ' + id + ' to ' + joindate);
-	
+
 		query.updateJoinDate = async.apply(user.setUserFields, id, {
 			joindate: joindate
 		});
 	}
-	
+
 	if (picture) {
 		winston.info('[session-sharing] Updating picture for user with id ' + id + ' to ' + picture);
-	
+
 		query.updatePicture = async.apply(user.setUserFields, id, {
 			picture: picture
 		});
 	}
-	
+
 	async.parallel(query, function (err, done) {
 		if (err) {
 			return callback(err);
 		}
-		
+
 		callback(null, done.updateProfile.uid);
 	});
 };
@@ -382,6 +391,67 @@ plugin.addMiddleware = function(data, callback) {
 
 	callback();
 };
+
+plugin.receiveJWT = function(req, res) {
+	var hasSession = req.hasOwnProperty('user') && req.user.hasOwnProperty('uid') && parseInt(req.user.uid, 10) > 0;
+
+	// Hook into ip blacklist functionality in core
+	if (meta.blacklist.test(req.ip)) {
+		if (hasSession) {
+			req.logout();
+			res.locals.fullRefresh = true;
+		}
+
+		plugin.cleanup({ res: res });
+		return handleGuest.apply(null, arguments);
+	}
+
+	if (Object.keys(req.query).length && req.query.hasOwnProperty('jwt') && req.query.jwt.length) {
+		return plugin.process(req.query.jwt, function(err, uid) {
+			if (err) {
+				switch(err.message) {
+					case 'banned':
+						winston.info('[session-sharing] uid ' + uid + ' is banned, not logging them in');
+						break;
+					case 'payload-invalid':
+						winston.warn('[session-sharing] The passed-in payload was invalid and could not be processed');
+						break;
+					default:
+						winston.warn('[session-sharing] Error encountered while parsing token: ' + err.message);
+						break;
+				}
+
+				return res.sendStatus(500);
+			}
+
+			winston.info('[session-sharing] Processing login for uid ' + uid);
+			req.uid = uid;
+			nbbAuthController.doLogin(req, uid, function(err) {
+				if (err) {
+					return res.status(403).send(err.message);
+				}
+
+				if (!req.session.returnTo) {
+					res.redirect(302, nconf.get('relative_path') + '/');
+			  } else {
+					var next = req.session.returnTo;
+					delete req.session.returnTo;
+					res.redirect(302, next);
+				}
+			});
+		});
+	} else if (hasSession) {
+		// Has login session but no cookie, logout
+		req.logout();
+		res.locals.fullRefresh = true;
+		handleGuest.apply(null, arguments);
+	} else {
+		handleGuest.apply(null, arguments);
+	}
+
+	res.sendStatus(200);
+};
+
 
 plugin.cleanup = function(data, callback) {
 	if (plugin.settings.cookieDomain) {

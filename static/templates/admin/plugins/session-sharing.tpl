@@ -9,6 +9,13 @@
 						<input type="text" id="name" name="name" title="Base Name" class="form-control" placeholder="appId" />
 					</div>
 					<div class="form-group">
+						<label for="cookieName">Mode</label>
+						<select class="form-control" name="mode">
+							<option value="cookie">Cookie</option>
+							<option value="rest">REST</option>
+						</select>
+					</div>
+					<div class="form-group">
 						<label for="cookieName">Cookie Name</label>
 						<input type="text" id="cookieName" name="cookieName" title="Cookie Name" class="form-control" placeholder="token" />
 					</div>
