@@ -181,6 +181,7 @@ plugin.findUser = function(payload, callback) {
 				if (err) {
 					return callback(err);
 				} else if (exists) {
+					payload.uid = checks.uid;
 					plugin.updateUser(payload, function(err, uid) {
 						callback(err, uid);
 					});
@@ -277,6 +278,7 @@ plugin.createUser = function(payload, callback) {
 plugin.updateUser = function(payload, callback) {
 	var parent = plugin.settings[PayloadKeys.parent],
 		data_payload = parent ? payload[parent] : payload,
+		uid = data_payload.uid,
 		id = data_payload[plugin.settings[PayloadKeys.id]],
 		firstName = data_payload[plugin.settings[PayloadKeys.firstName]],
 		lastName = data_payload[plugin.settings[PayloadKeys.lastName]],
@@ -285,10 +287,10 @@ plugin.updateUser = function(payload, callback) {
 		website = data_payload[plugin.settings[PayloadKeys.website]],
 		joindate = data_payload[plugin.settings[PayloadKeys.joindate]];
 
-	winston.info('[session-sharing] Updating profile info for user with id ' + id);
+	winston.info('[session-sharing] Updating profile info for user with uid ' + uid);
 
 	var query = {
-		updateProfile: async.apply(user.updateProfile, id, {
+		updateProfile: async.apply(user.updateProfile, uid, {
 			fullname: [firstName, lastName].join(' ').trim(),
 			location: location,
 			website: website
@@ -296,17 +298,17 @@ plugin.updateUser = function(payload, callback) {
 	};
 
 	if (joindate) {
-		winston.info('[session-sharing] Updating joindate for user with id ' + id + ' to ' + joindate);
+		winston.info('[session-sharing] Updating joindate for user with uid ' + uid + ' to ' + joindate);
 
-		query.updateJoinDate = async.apply(user.setUserFields, id, {
+		query.updateJoinDate = async.apply(user.setUserFields, uid, {
 			joindate: joindate
 		});
 	}
 
 	if (picture) {
-		winston.info('[session-sharing] Updating picture for user with id ' + id + ' to ' + picture);
+		winston.info('[session-sharing] Updating picture for user with id ' + uid + ' to ' + picture);
 
-		query.updatePicture = async.apply(user.setUserFields, id, {
+		query.updatePicture = async.apply(user.setUserFields, uid, {
 			picture: picture
 		});
 	}
@@ -332,7 +334,7 @@ plugin.addMiddleware = function(data, callback) {
 		}
 	};
 
-	data.app.use(function(req, res, next) {
+	var jwtMiddleware = function(req, res, next) {
 		// Only respond to page loads by guests, not api or asset calls
 		var blacklistedRoute = new RegExp('^' + nconf.get('relative_path') + '/(api|vendor|uploads|language|templates|debug)'),
 			blacklistedExt = /\.(css|js|tpl|json|jpg|png|bmp|rss|xml|woff2)$/,
@@ -387,7 +389,10 @@ plugin.addMiddleware = function(data, callback) {
 				handleGuest.apply(null, arguments);
 			}
 		}
-	});
+	}
+
+	if (plugin.settings.mode === "cookie")
+		data.app.use(jwtMiddleware);
 
 	callback();
 };
