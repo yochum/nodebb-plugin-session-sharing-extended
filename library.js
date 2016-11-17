@@ -280,6 +280,7 @@ plugin.updateUser = function(payload, callback) {
 		data_payload = parent ? payload[parent] : payload,
 		uid = data_payload.uid,
 		id = data_payload[plugin.settings[PayloadKeys.id]],
+		username = data_payload[plugin.settings[PayloadKeys.username]],
 		firstName = data_payload[plugin.settings[PayloadKeys.firstName]],
 		lastName = data_payload[plugin.settings[PayloadKeys.lastName]],
 		picture = data_payload[plugin.settings[PayloadKeys.picture]],
@@ -291,6 +292,7 @@ plugin.updateUser = function(payload, callback) {
 
 	var query = {
 		updateProfile: async.apply(user.updateProfile, uid, {
+			username: username,
 			fullname: [firstName, lastName].join(' ').trim(),
 			location: location,
 			website: website
