@@ -158,16 +158,7 @@ plugin.findUser = function(payload, callback) {
 	var parent = plugin.settings[PayloadKeys.parent],
 		data_payload = parent ? payload[parent] : payload,
 		id = data_payload[plugin.settings[PayloadKeys.id]],
-		email = data_payload[plugin.settings[PayloadKeys.email]],
-		username = data_payload[plugin.settings[PayloadKeys.username]];
-
-	if (!username && firstName && lastName) {
-		username = [firstName, lastName].join(' ').trim();
-	} else if (!username && firstName && !lastName) {
-		username = firstName;
-	} else if (!username && !firstName && lastName) {
-		username = lastName;
-	}
+		email = data_payload[plugin.settings[PayloadKeys.email]];
 
 	async.parallel({
 		uid: async.apply(db.getObjectField, plugin.settings.name + ':uid', id),
