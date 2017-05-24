@@ -243,6 +243,7 @@ plugin.createUser = function(payload, callback) {
 
 		var query = {
 			updateProfile: async.apply(user.updateProfile, uid, {
+				uid: uid,
 				fullname: [firstName, lastName].join(' ').trim(),
 				location: location,
 				website: website
@@ -292,6 +293,7 @@ plugin.updateUser = function(payload, callback) {
 
 	var query = {
 		updateProfile: async.apply(user.updateProfile, uid, {
+			uid: uid,
 			username: username,
 			fullname: [firstName, lastName].join(' ').trim(),
 			location: location,
